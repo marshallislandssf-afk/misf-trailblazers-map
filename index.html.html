@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MISF Volunteer Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: system-ui, -apple-system, sans-serif; background: #f5f5f3; color: #1a1a1a; }
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 20px; background: #fff;
+      border-bottom: 1px solid #e0e0e0; flex-shrink: 0;
+    }
+    header h1 { font-size: 17px; font-weight: 600; }
+    header p  { font-size: 12px; color: #888; margin-top: 1px; }
+
+    #controls {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 8px 16px; background: #fff;
+      border-bottom: 1px solid #e0e0e0; flex-shrink: 0;
+    }
+    #controls label { font-size: 12px; color: #666; }
+    #controls select, #controls input {
+      font-size: 12px; padding: 5px 9px;
+      border-radius: 7px; border: 1px solid #ccc;
+      background: #f9f9f7; color: #1a1a1a; outline: none;
+    }
+    #vol-count { margin-left: auto; font-size: 12px; font-weight: 500; color: #888; white-space: nowrap; }
+
+    #main { display: flex; flex: 1; overflow: hidden; min-height: 400px; }
+    #map  { flex: 1; z-index: 1; min-height: 400px; }
+
+    #panel {
+      width: 280px; flex-shrink: 0; background: #fff;
+      border-left: 1px solid #e0e0e0;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #panel-header {
+      padding: 10px 14px; border-bottom: 1px solid #e0e0e0;
+      font-size: 12px; font-weight: 600; color: #555;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #panel-list { overflow-y: auto; flex: 1; }
+    .panel-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 14px; cursor: pointer;
+      border-bottom: 0.5px solid #f0f0f0; transition: background 0.1s;
+    }
+    .panel-item:hover  { background: #f7f7f5; }
+    .panel-item.active { background: #EEF4FC; }
+    .panel-avatar {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600;
+    }
+    .panel-avatar img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+    .panel-info { overflow: hidden; flex: 1; }
+    .panel-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .panel-role { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dept-dot   { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px !important;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15) !important;
+      padding: 0 !important; overflow: hidden; min-width: 260px;
+    }
+    .leaflet-popup-content { margin: 0 !important; width: auto !important; }
+    .leaflet-popup-tip-container { display: none; }
+
+    .popup-inner { padding: 14px 16px; background: #ffffff; }
+    .popup-head  { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .popup-avatar {
+      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600;
+    }
+    .popup-title h3   { font-size: 14px; font-weight: 600; }
+    .popup-badge {
+      display: inline-block; font-size: 10px; font-weight: 500;
+      padding: 2px 7px; border-radius: 20px; margin-top: 3px;
+    }
+    .popup-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    .popup-table td { padding: 3px 0; vertical-align: top; }
+    .popup-table td:first-child { color: #999; width: 72px; }
+    .popup-bio {
+      font-size: 11px; color: #666; font-style: italic;
+      line-height: 1.5; margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .legend-bar {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      padding: 7px 16px; background: #fff;
+      border-top: 1px solid #e0e0e0; flex-shrink: 0;
+      font-size: 11px; color: #555;
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-dot  { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    .marker-pin {
+      border-radius: 50%; border: 2.5px solid #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.28);
+    }
+    .marker-cluster-small,
+    .marker-cluster-medium,
+    .marker-cluster-large { background-clip: padding-box; border-radius: 50%; }
+    .marker-cluster-small  { background-color: rgba(127,119,221,0.35); }
+    .marker-cluster-small div  { background-color: rgba(127,119,221,0.85); }
+    .marker-cluster-medium { background-color: rgba(55,138,221,0.35); }
+    .marker-cluster-medium div { background-color: rgba(55,138,221,0.85); }
+    .marker-cluster-large  { background-color: rgba(29,158,117,0.35); }
+    .marker-cluster-large div  { background-color: rgba(29,158,117,0.85); }
+    .marker-cluster div {
+      width: 30px; height: 30px; margin: 5px;
+      text-align: center; border-radius: 50%;
+      font: bold 12px/30px system-ui; color: #fff;
+    }
+
+    @media (max-width: 640px) { #panel { display: none; } }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>Marshall Islands Soccer Federation</h1>
+      <p>Global Volunteer Network</p>
+    </div>
+  </header>
+  <div id="controls">
+    <label>Department:</label>
+    <select id="deptFilter"><option value="">All departments</option></select>
+    <label>Search:</label>
+    <input type="text" id="search" placeholder="Name, city, or role…" style="width:170px"/>
+    <span id="vol-count"></span>
+  </div>
+  <div id="main">
+    <div id="map"></div>
+    <div id="panel">
+      <div id="panel-header">
+        <span>Volunteers</span>
+        <span id="panel-sub" style="font-weight:400;color:#aaa"></span>
+      </div>
+      <div id="panel-list"></div>
+    </div>
+  </div>
+  <div class="legend-bar" id="legend"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script>
+if (typeof L === "undefined") {
+  document.getElementById("map").innerHTML = '<div style="padding:40px;text-align:center;color:#c00;font-size:14px">Map failed to load — please check your internet connection and refresh the page.</div>';
+  throw new Error("Leaflet failed to load");
+}
+if (typeof L.markerClusterGroup === "undefined") {
+  document.getElementById("map").innerHTML = '<div style="padding:40px;text-align:center;color:#c00;font-size:14px">Clustering plugin failed to load — please refresh the page.</div>';
+  throw new Error("MarkerCluster failed to load");
+}
+/* ================================================================
+   VOLUNTEER DATA — edit this section to update the map
+   photo: "" for initials, or "./photos/name.jpg" or a full URL
+   lat/lng: find at maps.google.com — right-click any location
+================================================================ */
+const volunteers = [
+  {name:"Matt Webb",             city:"Exeter",         country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:50.72,  lng:-3.53,   role:"General Secretary",                    dept:"Board",                    email:"mattjameswebb91@gmail.com", phone:"447528518272",  tz:"GMT (UTC+0)",     teams:"Arsenal, Exeter City",              bio:"Coordination of MISF activities according to our objectives.",                                                                              photo:""},
+  {name:"Lloyd Owers",           city:"Oxford",         country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:51.75,  lng:-1.26,   role:"Technical Director",                   dept:"Board",                    email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"Chelsea",                           bio:"Overseeing sporting performance; from national team down to grassroots initiative.",                                                        photo:""},
+  {name:"Scott Hill",            city:"Kwajalein",      country:"Marshall Islands",flag:"🇲🇭",  lat:8.72,   lng:167.73,  role:"Chairman",                              dept:"Board",                    email:"",                          phone:"",              tz:"MHT (UTC+12)",    teams:"",                                  bio:"Ensuring we have a cohesive strategy in both the US and RMI. Deep understanding of the Marshall Islands and the governmental structures.", photo:""},
+  {name:"Shem Livai",            city:"Majuro",         country:"Marshall Islands",flag:"🇲🇭",  lat:7.09,   lng:171.38,  role:"President",                             dept:"Board",                    email:"",                          phone:"",              tz:"MHT (UTC+12)",    teams:"",                                  bio:"",                                                                                                                                         photo:""},
+  {name:"Divine Waiti",          city:"Majuro",         country:"Marshall Islands",flag:"🇸🇧",  lat:7.10,   lng:171.37,  role:"Vice-President",                        dept:"Board",                    email:"",                          phone:"",              tz:"MHT (UTC+12)",    teams:"",                                  bio:"",                                                                                                                                         photo:""},
+  {name:"Martin Housanau",       city:"Majuro",         country:"Marshall Islands",flag:"🇸🇧",  lat:7.08,   lng:171.39,  role:"Treasurer",                             dept:"Board",                    email:"",                          phone:"",              tz:"MHT (UTC+12)",    teams:"",                                  bio:"",                                                                                                                                         photo:""},
+  {name:"Justin Walley",         city:"Sarajevo",       country:"Bosnia",          flag:"🇧🇦",  lat:43.85,  lng:18.39,   role:"PR & Comms Director",                   dept:"Marketing and Commercial", email:"",                          phone:"",              tz:"CET (UTC+1)",     teams:"Northampton Town",                  bio:"Overseeing our PR, managing our Twitter, and occasionally coaching.",                                                                       photo:""},
+  {name:"Ben Curtis",            city:"Washington DC",  country:"United States",   flag:"🇺🇸",  lat:38.90,  lng:-77.04,  role:"Broadcast Manager",                     dept:"Marketing and Commercial", email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"",                                  bio:"Live streaming and matchday production.",                                                                                                   photo:""},
+  {name:"Gabe Lotz",             city:"Salt Lake City", country:"United States",   flag:"🇺🇸",  lat:40.76,  lng:-111.89, role:"Marketing Assistant",                   dept:"Marketing and Commercial", email:"",                          phone:"",              tz:"MST (UTC-7)",     teams:"",                                  bio:"Translations for Marshallese newsletters and content.",                                                                                     photo:""},
+  {name:"Em Miller",             city:"San Antonio",    country:"United States",   flag:"🇲🇭",  lat:29.42,  lng:-98.49,  role:"Social Media Support",                  dept:"Marketing and Commercial", email:"",                          phone:"",              tz:"CST (UTC-6)",     teams:"",                                  bio:"Supporting social media management.",                                                                                                       photo:""},
+  {name:"Matt Pole",             city:"Horsham",        country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:51.06,  lng:-0.33,   role:"Press Releases",                        dept:"Marketing and Commercial", email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"Horsham",                           bio:"Writing articles and press releases for the RMI website.",                                                                                  photo:""},
+  {name:"Ted London",            city:"Ann Arbor",      country:"United States",   flag:"🇺🇸",  lat:42.28,  lng:-83.74,  role:"Program Support",                       dept:"Operations",               email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"",                                  bio:"Providing Marshallese and cultural insights.",                                                                                              photo:""},
+  {name:"Woody Watson",          city:"Fayetteville",   country:"United States",   flag:"🇺🇸",  lat:36.06,  lng:-94.16,  role:"VP, North American Operations",         dept:"Operations",               email:"",                          phone:"",              tz:"CST (UTC-6)",     teams:"Sporting Kansas City",              bio:"Anything finance and ops related between the ponds.",                                                                                       photo:""},
+  {name:"Jason Roberts",         city:"Portland",       country:"United States",   flag:"🇺🇸",  lat:45.52,  lng:-122.68, role:"Head of Legal and Compliance",          dept:"Operations",               email:"",                          phone:"",              tz:"PST (UTC-8)",     teams:"West Ham, Portland Timbers",        bio:"Advising us on compliance and legal matters. Worked with RMI Ministry of Education for a number of years.",                                photo:""},
+  {name:"Michael Hopwood",       city:"Melbourne",      country:"Australia",       flag:"🇦🇺",  lat:-37.81, lng:144.96,  role:"Australasian Operations Manager",       dept:"Operations",               email:"",                          phone:"",              tz:"AEDT (UTC+11)",   teams:"Bolton Wanderers",                  bio:"Network building, partnerships, and fundraising opportunities in Australia.",                                                               photo:""},
+  {name:"Paul Smith",            city:"Adelaide",       country:"Australia",       flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:-34.93, lng:138.60,  role:"Australasian Operations",               dept:"Operations",               email:"",                          phone:"",              tz:"ACST (UTC+9:30)", teams:"Sheffield Wednesday, Adelaide United",bio:"Network building, partnerships, and fundraising opportunities in Australia.",                                                              photo:""},
+  {name:"Max Houchin",           city:"Bristol",        country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:51.45,  lng:-2.59,   role:"Social Impact & Operations Assistant",dept:"Operations",               email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"",                                  bio:"Supporting with logistics.",                                                                                                                photo:""},
+  {name:"Sabina Massidda",       city:"Warwick",        country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:52.28,  lng:-1.58,   role:"Admin Support",                         dept:"Operations",               email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"",                                  bio:"Supporting with logistics.",                                                                                                                photo:""},
+  {name:"Bruno Giuduli",         city:"Westport",       country:"United States",   flag:"🇺🇸",  lat:41.14,  lng:-73.36,  role:"Environmental & Climate Assistant",     dept:"Operations",               email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"",                                  bio:"Supporting with climate change and environmental projects and considerations.",                                                             photo:""},
+  {name:"Amir St. Clair",        city:"Chicago",        country:"United States",   flag:"🇺🇸",  lat:41.88,  lng:-87.63,  role:"Outrigger Challenge Cup & Event Ops",   dept:"Operations",               email:"",                          phone:"",              tz:"CST (UTC-6)",     teams:"",                                  bio:"Managing the organization of the US events such as the Outrigger Challenge Cup.",                                                          photo:""},
+  {name:"Tony Theomae",          city:"Majuro",         country:"Marshall Islands",flag:"🇸🇧",  lat:7.11,   lng:171.40,  role:"On-Island Head of Coaching",            dept:"Community & Schools",      email:"",                          phone:"",              tz:"MHT (UTC+12)",    teams:"Inter Miami",                       bio:"Help coordinate on-island sessions. Futsal coaching.",                                                                                      photo:""},
+  {name:"Danielle Mihalko",      city:"Ann Arbor",      country:"United States",   flag:"🇺🇸",  lat:42.27,  lng:-83.73,  role:"Women's Team Manager",                  dept:"Sporting Operations",      email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"",                                  bio:"Assisting with the organization of the Women's National Team events, the liaison between federation, head coach, and players.",             photo:""},
+  {name:"Danny Razook",          city:"Kwajalein",      country:"Marshall Islands",flag:"🇺🇸",  lat:8.74,   lng:167.74,  role:"Men's Team Manager",                    dept:"Sporting Operations",      email:"",                          phone:"",              tz:"MHT (UTC+12)",    teams:"",                                  bio:"Assisting with the organization of the Men's National Team events, the liaison between federation, head coach, and players.",               photo:""},
+  {name:"Jack Hutchinson",       city:"Saffron Walden", country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:52.02,  lng:0.24,    role:"Head of Global Talent ID",              dept:"Sporting Operations",      email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"Liverpool",                         bio:"Identifying new Marshall Islands eligible players, coordination of national team camps.",                                                    photo:""},
+  {name:"Pat McStay",            city:"Henrico",        country:"United States",   flag:"🇺🇸",  lat:37.55,  lng:-77.37,  role:"North American Player Recruitment",     dept:"Sporting Operations",      email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"",                                  bio:"Identifying new Marshall Islands eligible players in the United States.",                                                                   photo:""},
+  {name:"Gabriel Felype",        city:"São Paulo",      country:"Brazil",          flag:"🇧🇷",  lat:-23.55, lng:-46.63,  role:"Player Database Manager",               dept:"Sporting Operations",      email:"",                          phone:"",              tz:"BRT (UTC-3)",     teams:"",                                  bio:"Assist in collecting player data and organizing it into specific spreadsheets.",                                                            photo:""},
+  {name:"Wyatt Burrows",         city:"Richmond",       country:"United States",   flag:"🇺🇸",  lat:37.93,  lng:-84.29,  role:"Player Pathways",                       dept:"Sporting Operations",      email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"",                                  bio:"Helping our National Team eligible players find clubs and playing opportunities.",                                                          photo:""},
+  {name:"Dylan Boggiss",         city:"Hamilton",       country:"New Zealand",     flag:"🇳🇿",  lat:-37.79, lng:175.28,  role:"Player Pathways",                       dept:"Sporting Operations",      email:"",                          phone:"",              tz:"NZDT (UTC+13)",   teams:"",                                  bio:"Helping our National Team eligible players find clubs and playing opportunities.",                                                          photo:""},
+  {name:"Bradley Kirby-Brisley", city:"South Carolina", country:"United States",   flag:"🇺🇸",  lat:33.84,  lng:-81.16,  role:"Kit & Equipment Manager",               dept:"Sporting Operations",      email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"Charleston Battery, Arsenal",       bio:"Assist with equipment and additional soccer operations measures as requested.",                                                             photo:""},
+  {name:"Zach Jones",            city:"Tenino",         country:"United States",   flag:"🇺🇸",  lat:46.85,  lng:-122.85, role:"Operations Support",                    dept:"Sporting Operations",      email:"",                          phone:"",              tz:"PST (UTC-8)",     teams:"",                                  bio:"Supporting with admin, operations and logistics.",                                                                                          photo:""},
+  {name:"Katie Smith",           city:"Cincinnati",     country:"United States",   flag:"🇺🇸",  lat:39.10,  lng:-84.51,  role:"Women's NT Head Coach",                 dept:"National Team",            email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"",                                  bio:"",                                                                                                                                         photo:""},
+  {name:"Josie Matlick",         city:"Rogers",         country:"United States",   flag:"🇺🇸",  lat:36.33,  lng:-94.12,  role:"Women's NT Assistant Coach",            dept:"National Team",            email:"",                          phone:"",              tz:"CST (UTC-6)",     teams:"",                                  bio:"",                                                                                                                                         photo:""},
+  {name:"Dean Johnson",          city:"Rogers",         country:"United States",   flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:36.34,  lng:-94.11,  role:"Men's NT Assistant Head Coach",         dept:"National Team",            email:"",                          phone:"",              tz:"CST (UTC-6)",     teams:"",                                  bio:"",                                                                                                                                         photo:""},
+  {name:"Matt Perrella",         city:"New Jersey",     country:"United States",   flag:"🇺🇸",  lat:40.06,  lng:-74.41,  role:"Men's NT Assistant Coach",              dept:"National Team",            email:"",                          phone:"",              tz:"EST (UTC-5)",     teams:"",                                  bio:"",                                                                                                                                         photo:""},
+  {name:"Will Wilson",           city:"Fareham",        country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:50.85,  lng:-1.18,   role:"Futsal Coordinator",                    dept:"National Team",            email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"",                                  bio:"Ensuring our futsal provision on island helps support the development of the game and meets the requirements of confederations.",            photo:""},
+  {name:"Dan Kiernan",           city:"Colchester",     country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:51.89,  lng:0.90,    role:"Strength & Conditioning Coordinator",   dept:"National Team",            email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"",                                  bio:"Creating strength and conditioning programmes for our national team players.",                                                              photo:""},
+  {name:"Rigo Resendez",         city:"Springdale",     country:"United States",   flag:"🇺🇸",  lat:36.19,  lng:-94.13,  role:"National Team Physio",                  dept:"National Team",            email:"",                          phone:"",              tz:"CST (UTC-6)",     teams:"",                                  bio:"Physiotherapist for national team events in the US.",                                                                                       photo:""},
+  {name:"Mike Wheeler",          city:"Liverpool",      country:"England",         flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", lat:53.41,  lng:-2.99,   role:"Lead Analyst",                          dept:"National Team",            email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"",                                  bio:"Analysing video of opposition for national team coaches.",                                                                                  photo:""},
+  {name:"Ronan Manning",         city:"Minneapolis",    country:"United States",   flag:"🇺🇸",  lat:44.98,  lng:-93.27,  role:"Analyst",                               dept:"National Team",            email:"",                          phone:"",              tz:"CST (UTC-6)",     teams:"",                                  bio:"Analysing video of opposition for national team coaches.",                                                                                  photo:""},
+  {name:"Ross Mitchell",         city:"Armadale",       country:"Scotland",        flag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", lat:55.89,  lng:-3.70,   role:"Analyst",                               dept:"National Team",            email:"",                          phone:"",              tz:"GMT (UTC+0)",     teams:"Airdrie",                           bio:"Analysing video of opposition for national team coaches.",                                                                                  photo:""}
+];
+/* ================================================================
+   END OF VOLUNTEER DATA
+================================================================ */
+
+const deptColors = {
+  "Board":                   {pin:"#7F77DD", light:"#EEEDFE", dark:"#3C3489"},
+  "Operations":              {pin:"#378ADD", light:"#E6F1FB", dark:"#0C447C"},
+  "Marketing and Commercial":{pin:"#D4537E", light:"#FBEAF0", dark:"#72243E"},
+  "Sporting Operations":     {pin:"#1D9E75", light:"#E1F5EE", dark:"#085041"},
+  "National Team":           {pin:"#EF9F27", light:"#FAEEDA", dark:"#633806"},
+  "Community & Schools":     {pin:"#E24B4A", light:"#FCEBEB", dark:"#791F1F"}
+};
+
+function initials(n) { return n.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
+
+function makeIcon(v) {
+  const col = (deptColors[v.dept]||{pin:"#888"}).pin;
+  return L.divIcon({
+    className:"",
+    html:`<div class="marker-pin" style="background:${col};width:22px;height:22px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.28)"></div>`,
+    iconSize:[22,22], iconAnchor:[11,11], popupAnchor:[0,-14]
+  });
+}
+
+function popupHTML(v) {
+  const dc = deptColors[v.dept]||{pin:"#888",light:"#eee",dark:"#333"};
+  const hasPhoto = v.photo && v.photo.trim()!=="";
+  const avatar = hasPhoto
+    ? `<img src="${v.photo}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+    : `<div class="popup-avatar" style="background:${dc.light};color:${dc.pin};width:40px;height:40px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">${initials(v.name)}</div>`;
+  const rows = [
+    ["Location", `${v.city}, ${v.country}`],
+    ["Time zone", v.tz],
+    v.email ? ["Email", `<a href="mailto:${v.email}" style="color:#185FA5">${v.email}</a>`] : null,
+    v.phone ? ["Phone", v.phone] : null,
+    v.teams ? ["Supports", v.teams] : null,
+  ].filter(Boolean).map(([k,val])=>`<tr><td style="color:#999;width:72px;padding:3px 0;vertical-align:top">${k}</td><td style="padding:3px 0;vertical-align:top">${val}</td></tr>`).join("");
+  const bio = v.bio ? `<div class="popup-bio">"${v.bio}"</div>` : "";
+  return `<div style="padding:14px 16px;background:#ffffff;font-family:system-ui,-apple-system,sans-serif">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      ${avatar}
+      <div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:3px">${v.flag||""} ${v.name}</div>
+        <span style="display:inline-block;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;background:${dc.light};color:${dc.dark}">${v.dept}</span>
+      </div>
+    </div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <tr><td style="color:#999;width:72px;padding:3px 0;vertical-align:top">Role</td><td style="padding:3px 0;font-weight:600">${v.role}</td></tr>
+      ${rows}
+    </table>
+    ${bio}
+  </div>`;
+}
+
+const map = L.map("map",{zoomControl:true}).setView([25,10],2);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom:18
+}).addTo(map);
+
+const cluster = L.markerClusterGroup({
+  maxClusterRadius:50, spiderfyOnMaxZoom:true,
+  showCoverageOnHover:false, zoomToBoundsOnClick:true
+});
+
+const markerMap = new Map();
+
+function buildMarkers(data) {
+  cluster.clearLayers(); markerMap.clear();
+  data.forEach(v => {
+    const m = L.marker([v.lat,v.lng],{icon:makeIcon(v)});
+    m.bindPopup(popupHTML(v),{maxWidth:290,minWidth:260});
+    m.on("click",()=>highlightPanel(v.name));
+    markerMap.set(v.name,m);
+    cluster.addLayer(m);
+  });
+}
+map.addLayer(cluster);
+
+function buildPanel(data) {
+  const list = document.getElementById("panel-list");
+  list.innerHTML="";
+  document.getElementById("panel-sub").textContent=`${data.length} volunteer${data.length!==1?"s":""}`;
+  data.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(v=>{
+    const dc = deptColors[v.dept]||{pin:"#888",light:"#eee"};
+    const hasPhoto = v.photo && v.photo.trim()!=="";
+    const av = hasPhoto
+      ? `<div class="panel-avatar"><img src="${v.photo}" alt="${v.name}"></div>`
+      : `<div class="panel-avatar" style="background:${dc.light};color:${dc.pin}">${initials(v.name)}</div>`;
+    const item = document.createElement("div");
+    item.className="panel-item"; item.dataset.name=v.name;
+    item.innerHTML=`${av}<div class="panel-info"><div class="panel-name">${v.flag||""} ${v.name}</div><div class="panel-role">${v.role} &middot; ${v.city}</div></div><div class="dept-dot" style="background:${dc.pin}"></div>`;
+    item.addEventListener("click",()=>{
+      const m=markerMap.get(v.name);
+      if(m){ cluster.zoomToShowLayer(m,()=>{ map.setView([v.lat,v.lng],10); m.openPopup(); }); }
+      highlightPanel(v.name);
+    });
+    list.appendChild(item);
+  });
+}
+
+function highlightPanel(name) {
+  document.querySelectorAll(".panel-item").forEach(el=>el.classList.remove("active"));
+  const el=document.querySelector(`.panel-item[data-name="${CSS.escape(name)}"]`);
+  if(el){ el.classList.add("active"); el.scrollIntoView({block:"nearest",behavior:"smooth"}); }
+}
+
+function buildLegend() {
+  const leg=document.getElementById("legend");
+  Object.entries(deptColors).forEach(([dept,cols])=>{
+    const i=document.createElement("div"); i.className="legend-item";
+    i.innerHTML=`<div class="legend-dot" style="background:${cols.pin}"></div>${dept}`;
+    leg.appendChild(i);
+  });
+}
+
+function populateDepts() {
+  const sel=document.getElementById("deptFilter");
+  [...new Set(volunteers.map(v=>v.dept))].sort().forEach(d=>{
+    const o=document.createElement("option"); o.value=d; o.textContent=d; sel.appendChild(o);
+  });
+}
+
+function filter() {
+  const dept=document.getElementById("deptFilter").value;
+  const q=document.getElementById("search").value.toLowerCase();
+  const out=volunteers.filter(v=>
+    (!dept||v.dept===dept)&&
+    (!q||v.name.toLowerCase().includes(q)||v.city.toLowerCase().includes(q)||v.role.toLowerCase().includes(q))
+  );
+  buildMarkers(out); buildPanel(out);
+  document.getElementById("vol-count").textContent=`${out.length} shown`;
+}
+
+document.getElementById("deptFilter").addEventListener("change",filter);
+document.getElementById("search").addEventListener("input",filter);
+
+buildLegend(); populateDepts(); buildMarkers(volunteers); buildPanel(volunteers);
+document.getElementById("vol-count").textContent=`${volunteers.length} shown`;
+</script>
+</body>
+</html>
